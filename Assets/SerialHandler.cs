@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO.Ports;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -29,6 +30,7 @@ public class SerialHandler : MonoBehaviour
     public string DATASTR = "";
 
     private SerialPort serialPort_;
+    private string portName_ = "COM0";
     private Thread thread_;
     private bool isRunning_ = false;
 
@@ -58,6 +60,7 @@ public class SerialHandler : MonoBehaviour
         isNewMessageReceived_ = false;
 
         _CH = CH;
+
     }
 
     void OnDestroy()
@@ -67,16 +70,36 @@ public class SerialHandler : MonoBehaviour
 
     private void Open()
     {
-        serialPort_ = new SerialPort(portName, baudRate, Parity.None, 8, StopBits.One);
+        serialPort_ = new SerialPort(portName_, baudRate, Parity.None, 8, StopBits.One);
         //または
         //serialPort_ = new SerialPort(portName, baudRate);
         serialPort_.ReadTimeout = 50; //[milliseconds]
-        serialPort_.Open();
+        try
+        {
+            serialPort_.Open();
 
-        isRunning_ = true;
+            isRunning_ = true;
 
-        thread_ = new Thread(Read);
-        thread_.Start();
+            Debug.Log("Opening" + portName_);
+            thread_ = new Thread(Read);
+            thread_.Start();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning(e);
+            char[] c = portName_.ToCharArray();
+            if (c[3]++ < '9')
+            {
+                portName_ = new string(c);
+                Open();
+            }
+            else
+            {
+                Debug.LogError("Couldn't open any COM port");
+            }
+
+            return;
+        }
     }
     private void Close()
     {
@@ -103,8 +126,8 @@ public class SerialHandler : MonoBehaviour
             {
                 byte[] message_ = new byte[17];
                 int length = serialPort_.Read(message_, 0, 17);
-                Debug.Log(length);
-                if (length > 0)
+                //Debug.Log(length);
+                if (length <= 5)
                 {
                     /*string temp = "CH:" + message_[0] + " FT:" + message_[1] + " ID:0x" + message_[2] + message_[3] + message_[4] + " DLC:" + message_[5];
                     Debug.Log(temp);
@@ -128,7 +151,7 @@ public class SerialHandler : MonoBehaviour
             {
 
                 Debug.LogWarning(e.Message);
-
+                return;
             }
         }
     }
