@@ -19,20 +19,20 @@ public class mainScript : MonoBehaviour
     {
         Array.Resize(ref value, 8);
         Array.Copy(new byte[] { 100, 100, 100, 100, 100, 100, 100, 100 }, 0, value, 0, 8);
-        //Invoke("DelayMethod", 1.0f);
+        Invoke("DelayMethod", 1.0f);
         //serialHandler.OnDataReceived += serialHandler.SerialDataReceivedEventHandler(moveAmp);
     }
 
     // Update is called once per frame
     void Update()
     {
-        //moveAmp();
+        moveAmp();
     }
 
     private void DelayMethod()
     {
         //Debug.Log("004128" + (char)value + (char)100 + (char)100 + (char)100 + (char)100 + (char)100 + (char)100 + (char)100);
-        //serialHandler.WriteCAN(0x302, value2);
+        serialHandler.WriteCAN(0x302, value2);
         Invoke("DelayMethod", 0.1f);
     }
 

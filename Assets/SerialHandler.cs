@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO.Ports;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -9,7 +9,7 @@ using UnityEngine;
 public class SerialHandler : MonoBehaviour
 {
     public delegate void SerialDataReceivedEventHandler(object sender, SerialDataReceivedEventArgs e);
-    public event SerialDataReceivedEventHandler OnDataReceived;
+    public event System.IO.Ports.SerialDataReceivedEventHandler DataReceived;
 
     //ポート名
     //例
@@ -24,13 +24,17 @@ public class SerialHandler : MonoBehaviour
     public int CH { get; protected set; } = 0;
     public int FRAMETYPE = 0;
     public int ID = 0;
-    public string ID_HEX;
+    public string ID_HEX = "";
     public int DLC = 0;
     public byte[] DATA = new byte[8];
     public string DATASTR = "";
+    public Dictionary<string, string> _dict = new Dictionary<string, string>();
+    public string LeftWheel = "";
+    public string RightWheel = "";
+    public string Current = "";
+    public List<string> _ID = new List<string> { };
 
     private SerialPort serialPort_;
-    private string portName_ = "COM0";
     private Thread thread_;
     private bool isRunning_ = false;
 
@@ -60,8 +64,10 @@ public class SerialHandler : MonoBehaviour
         isNewMessageReceived_ = false;
 
         _CH = CH;
-
     }
+
+
+
 
     void OnDestroy()
     {
@@ -70,36 +76,16 @@ public class SerialHandler : MonoBehaviour
 
     private void Open()
     {
-        serialPort_ = new SerialPort(portName_, baudRate, Parity.None, 8, StopBits.One);
+        serialPort_ = new SerialPort(portName, baudRate, Parity.None, 8, StopBits.One);
         //または
         //serialPort_ = new SerialPort(portName, baudRate);
         serialPort_.ReadTimeout = 50; //[milliseconds]
-        try
-        {
-            serialPort_.Open();
+        serialPort_.Open();
 
-            isRunning_ = true;
+        isRunning_ = true;
 
-            Debug.Log("Opening" + portName_);
-            thread_ = new Thread(Read);
-            thread_.Start();
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogWarning(e);
-            char[] c = portName_.ToCharArray();
-            if (c[3]++ < '9')
-            {
-                portName_ = new string(c);
-                Open();
-            }
-            else
-            {
-                Debug.LogError("Couldn't open any COM port");
-            }
-
-            return;
-        }
+        thread_ = new Thread(Read);
+        thread_.Start();
     }
     private void Close()
     {
@@ -118,6 +104,18 @@ public class SerialHandler : MonoBehaviour
         }
     }
 
+
+
+    private static void DataReceivedHandler(
+                        object sender,
+                        SerialDataReceivedEventArgs e)
+    {
+        SerialPort sp = (SerialPort)sender;
+        string indata = sp.ReadExisting();
+        Console.WriteLine("Data Received:");
+        Console.Write(indata);
+    }
+
     private void Read()
     {
         while (isRunning_ && serialPort_ != null && serialPort_.IsOpen)
@@ -127,31 +125,39 @@ public class SerialHandler : MonoBehaviour
                 byte[] message_ = new byte[17];
                 int length = serialPort_.Read(message_, 0, 17);
                 //Debug.Log(length);
-                if (length <= 5)
+                if (length > 6)
                 {
                     /*string temp = "CH:" + message_[0] + " FT:" + message_[1] + " ID:0x" + message_[2] + message_[3] + message_[4] + " DLC:" + message_[5];
                     Debug.Log(temp);
                     */
                     CH = message_[0] - '0';
-                    FRAMETYPE = message_[1] - '0';
-                    ID_HEX = "0x" + Encoding.ASCII.GetString(message_, 2, 3);
+                    FRAMETYPE = message_[0] - '0';
+                    ID_HEX = "0x" + Encoding.ASCII.GetString(message_, 1, 3);
                     ID = Convert.ToInt32(ID_HEX, 16);
-                    DLC = message_[5] - '0';
+                    DLC = message_[4] - '0';
 
-                    DATASTR = Encoding.ASCII.GetString(message_, 6, DLC);
+                    DATASTR = Encoding.ASCII.GetString(message_, 5, DLC);
+
+                    if(!_ID.Contains(ID_HEX))
+                        _ID.Add(ID_HEX);
+                    if (!_dict.TryAdd(ID_HEX, DATASTR))
+                    {
+                        _dict[ID_HEX] = DATASTR;
+                    }
                     Array.Clear(DATA, 0, 8);
-                    Array.Copy(message_, 6, DATA, 0, DLC);
+                    Array.Copy(message_, 5, DATA, 0, DLC);
 
                     Debug.Log(Encoding.ASCII.GetString(message_, 0, length));
                     Debug.Log(string.Join(" ", message_.Select(b => b.ToString("X2"))));
                     isNewMessageReceived_ = true;
                 }
+                onReceived();
             }
             catch (System.Exception e)
             {
 
                 Debug.LogWarning(e.Message);
-                return;
+
             }
         }
     }
@@ -221,4 +227,15 @@ public class SerialHandler : MonoBehaviour
     /// <exception cref="System.ArgumentException">渡されたデータの長さが8バイトを超える場合にスローされます。</exception>
     public void WriteCAN(int address, params byte[] data) =>
         WriteCAN(Channels.ch1, Frametypes.data, address, data);
+
+    public void onReceived()
+    {
+        //Debug.Log("Received");
+        if (_dict.TryGetValue("0x325", out string value))
+            RightWheel = value;
+        if (_dict.TryGetValue("0x325", out string value2))
+            LeftWheel = value2;
+        if (_dict.TryGetValue("0x102", out string value3))
+            Current = value3;
+    }
 }
